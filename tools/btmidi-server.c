@@ -480,7 +480,7 @@ static bool midi_notify_cb(struct io *io, void *user_data)
 				server->gatt,
 				server->midi_io_handle,
 				midi_write_data(parser),
-				midi_write_data_size(parser));
+				midi_write_data_size(parser), false);
 		}
 	};
 
@@ -501,7 +501,7 @@ static bool midi_notify_cb(struct io *io, void *user_data)
 				server->gatt,
 				server->midi_io_handle,
 				(void *)midi_write_data(&server->midi_out),
-				midi_write_data_size(&server->midi_out));
+				midi_write_data_size(&server->midi_out), false);
 		}
 	}
 
@@ -753,7 +753,7 @@ static int create_seq_port(struct server *server)
 			snd_strerror(err), err);
 		goto _err_port;
 	}
-	
+
 	/* Input file descriptors */
 	snd_seq_poll_descriptors(server->seq_handle, &pfd, 1, POLLIN);
 
@@ -815,7 +815,7 @@ static void att_conn_callback(int fd, uint32_t events, void *user_data)
 		ba2str(&addr.l2_bdaddr, ba);
 		printf("Connect from %s\n", ba);
 	}
-	
+
 	server->att = bt_att_new(new_fd, false);
 
 	if (!server->att) {
@@ -835,8 +835,8 @@ static void att_conn_callback(int fd, uint32_t events, void *user_data)
 		fprintf(stderr, "Failed to set ATT disconnect handler\n");
 		goto _unref_att;
 	}
-	
-	server->gatt = bt_gatt_server_new(server->db, server->att, mtu);
+
+	server->gatt = bt_gatt_server_new(server->db, server->att, mtu, 0);
 	if (!server->gatt) {
 		fprintf(stderr, "Failed to create GATT server\n");
 		goto _unref_att;
@@ -866,7 +866,7 @@ static int l2cap_le_att_listen(bdaddr_t *src, uint8_t src_type)
 {
 	int att_fd;
 	struct sockaddr_l2 addr;
-	
+
 	att_fd = socket(PF_BLUETOOTH, SOCK_SEQPACKET | SOCK_CLOEXEC, BTPROTO_L2CAP);
 	if (att_fd < 0) {
 		perror("Failed to create L2CAP socket");
@@ -1040,8 +1040,6 @@ int main(int argc, char *argv[])
 	sigaddset(&mask, SIGINT);
 	sigaddset(&mask, SIGTERM);
 
-	mainloop_set_signal(&mask, signal_cb, NULL, NULL);
-
 	server = server_create();
 	if (!server) {
 		return EXIT_FAILURE;
@@ -1078,7 +1076,7 @@ int main(int argc, char *argv[])
 		goto _remove_fd;
 	}
 
-	exit_status = mainloop_run();
+	exit_status = mainloop_run_with_signal(signal_cb, NULL);
 
 _remove_fd:
 	mainloop_remove_fd(fd);
